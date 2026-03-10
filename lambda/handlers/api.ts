@@ -83,7 +83,6 @@ function json(statusCode: number, body: unknown): ApiResponse {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
       'X-Zebra-Mock': 'true',
     },
     body: JSON.stringify(body),

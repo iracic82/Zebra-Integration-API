@@ -10,7 +10,7 @@ A fully functional mock implementation of the Zebra VisibilityIQ Foresight API, 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          CSP Portal / Clients                          │
 │                                                                         │
-│   apikey: REDACTED_API_KEY                                    │
+│   apikey: <your-api-key>                                               │
 │   Authorization: Bearer <token>                                         │
 └──────────────────────────────┬──────────────────────────────────────────┘
                                │ HTTPS
@@ -119,17 +119,14 @@ All endpoints (except `/health` and `/v2/oauth/token`) require authentication.
 ### Option 1: API Key (Simple Key)
 
 ```bash
-curl -H "apikey: REDACTED_API_KEY" \
+curl -H "apikey: <your-api-key>" \
   "https://zebra-api.highvelocitynetworking.com/zebra/e112b779-b0e8-4c01-b146-2920330121d6/v2/data/devices/operation/analytics/visibility/total-devices"
 ```
 
-**Available API Keys** (stored in AWS Secrets Manager):
-
-| Key | Purpose |
-|-----|---------|
-| `REDACTED_API_KEY` | Production |
-| `REDACTED_API_KEY` | Partner integrations |
-| `REDACTED_API_KEY` | CSP Portal |
+**API Keys** are stored in AWS Secrets Manager (`zebra-visibilityiq/api-keys`). Retrieve them with:
+```bash
+aws secretsmanager get-secret-value --secret-id "zebra-visibilityiq/api-keys" --profile okta-sso --query SecretString --output text
+```
 
 ### Option 2: OAuth 2.0 Client Credentials
 
@@ -137,7 +134,7 @@ curl -H "apikey: REDACTED_API_KEY" \
 ```bash
 curl -X POST "https://zebra-api.highvelocitynetworking.com/zebra/e112b779-b0e8-4c01-b146-2920330121d6/v2/oauth/token" \
   -H "Content-Type: application/json" \
-  -d '{"client_id":"REDACTED_CLIENT_ID","client_secret":"REDACTED_SECRET"}'
+  -d '{"client_id":"<your-client-id>","client_secret":"<your-client-secret>"}'
 ```
 
 Response:
@@ -156,14 +153,7 @@ curl -H "Authorization: Bearer zviq_1773149075169_dayq4je6pts" \
   "https://zebra-api.highvelocitynetworking.com/zebra/e112b779-b0e8-4c01-b146-2920330121d6/v2/data/devices/operation/analytics/visibility/total-devices"
 ```
 
-**OAuth Clients:**
-
-| Client ID | Client Secret | Purpose |
-|-----------|---------------|---------|
-| `REDACTED_CLIENT_ID` | `REDACTED_SECRET` | CSP Portal |
-| `REDACTED_CLIENT_ID` | `REDACTED_SECRET` | Partner App |
-
-Tokens expire after **1 hour** (matching real Zebra behavior).
+**OAuth Clients** are stored in AWS Secrets Manager alongside the API keys. Tokens expire after **1 hour** (matching real Zebra behavior).
 
 ---
 
@@ -456,15 +446,71 @@ Use these values when configuring the Zebra integration in the CSP portal:
 | **Provider URL** | `https://zebra-api.highvelocitynetworking.com` |
 | **Company Name** | `Acme Corp` |
 | **Partner Name** | `Mock Partner Corp.` |
-| **API Key** | `REDACTED_API_KEY` |
+| **API Key** | *(from Secrets Manager)* |
 | **Tenant UUID** | `e112b779-b0e8-4c01-b146-2920330121d6` |
 
 ### Quick Test
 
 ```bash
-curl -H "apikey: REDACTED_API_KEY" \
+curl -H "apikey: <your-api-key>" \
   "https://zebra-api.highvelocitynetworking.com/zebra/e112b779-b0e8-4c01-b146-2920330121d6/v2/data/devices/operation/analytics/visibility/total-devices"
 ```
+
+---
+
+## Data Viewer (Docker UI)
+
+A dark-themed single-page data viewer for browsing all mock API data — devices, batteries, app analytics, scan metrics, contracts, repairs, printers, and WLAN.
+
+### Run from Docker Hub
+
+```bash
+docker run -d -p 8080:80 \
+  -e API_URL=https://zebra-api.highvelocitynetworking.com \
+  -e API_KEY=<your-api-key> \
+  iracic82/zebra-integration-api-data-viewer:latest
+```
+
+Open http://localhost:8080
+
+### Run with Docker Compose
+
+```bash
+# Set your API key
+export API_KEY=<your-api-key>
+
+# Start
+docker compose up -d
+
+# Stop
+docker compose down
+```
+
+Opens on http://localhost:8081 (configurable in `docker-compose.yml`).
+
+### Build Locally
+
+```bash
+docker build -t zebra-data-viewer .
+docker run -d -p 8080:80 \
+  -e API_URL=https://zebra-api.highvelocitynetworking.com \
+  -e API_KEY=<your-api-key> \
+  zebra-data-viewer
+```
+
+### Tabs
+
+| Tab | Data Source |
+|-----|------------|
+| Overview | Summary cards across all endpoints |
+| Devices | `total-devices` — serial, model, status, site, MAC, IP, IMEI |
+| Batteries | `battery-level` — level, health, voltage, temperature, cycles |
+| App Analytics | `application-analytics` — app usage, crashes, data consumption |
+| Scan Metrics | `scan-metrics` — total/successful/failed scans, success rate |
+| Contracts | `entitlement` — contract ID, type, dates, coverage status |
+| Repairs | `repair-lifecycle` — RMA, fault code, on-time delivery, NTF |
+| Printers | `printer-utilization` — labels printed, ribbon/media usage |
+| WLAN | `wlan-signal-strength` — signal dBm, quality, SSID, channel |
 
 ---
 
