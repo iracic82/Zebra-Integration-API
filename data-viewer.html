@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zebra VisibilityIQ - Data Viewer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --green: #4ade80;
+    --red: #f87171;
+    --orange: #fb923c;
+    --yellow: #fbbf24;
+    --purple: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Cascadia Code', monospace; background: var(--bg); color: var(--text); font-size: 13px; }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .header .config { display: flex; gap: 8px; align-items: center; flex: 1; flex-wrap: wrap; }
+  .header input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; }
+  .header input#apiUrl { width: 360px; }
+  .header input#apiKey { width: 200px; }
+  .header input#tenantId { width: 300px; }
+  .header button { background: var(--accent); color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 500; }
+  .header button:hover { opacity: 0.85; }
+  .header button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+  .status.ok { background: #064e3b; color: var(--green); }
+  .status.err { background: #450a0a; color: var(--red); }
+  .status.loading { background: #1e1b4b; color: var(--accent); }
+
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; overflow-x: auto; }
+  .tab { padding: 10px 18px; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; font-size: 12px; font-weight: 500; transition: all 0.15s; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .count { background: var(--border); color: var(--text-dim); padding: 1px 6px; border-radius: 8px; font-size: 10px; margin-left: 6px; }
+  .tab.active .count { background: rgba(108,140,255,0.2); color: var(--accent); }
+
+  .toolbar { padding: 12px 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .toolbar input[type="text"] { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; width: 260px; }
+  .toolbar select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; }
+  .toolbar .stats { color: var(--text-dim); font-size: 11px; margin-left: auto; }
+
+  .content { padding: 0 24px 24px; overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { text-align: left; padding: 8px 10px; background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; cursor: pointer; white-space: nowrap; }
+  th:hover { color: var(--text); }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 12px; }
+  tr:hover td { background: rgba(108,140,255,0.04); }
+
+  .mono { font-family: 'SF Mono', 'Cascadia Code', monospace; color: var(--accent); font-size: 11px; }
+  .dim { color: var(--text-dim); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 500; }
+  .tag-mc { background: #1e3a5f; color: #60a5fa; }
+  .tag-printer { background: #3b2a1a; color: #fb923c; }
+  .tag-scanner { background: #1a3c2a; color: #4ade80; }
+  .tag-ok { background: #064e3b; color: var(--green); }
+  .tag-warn { background: #451a03; color: var(--orange); }
+  .tag-err { background: #450a0a; color: var(--red); }
+  .tag-info { background: #1e1b4b; color: var(--purple); }
+
+  .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; padding: 16px 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+  .card .label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+  .card .sub { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Zebra VisibilityIQ Data Viewer</h1>
+  <div class="config">
+    <input id="apiUrl" value="__API_URL__" placeholder="API Base URL">
+    <input id="apiKey" value="__API_KEY__" placeholder="API Key">
+    <input id="tenantId" value="e112b779-b0e8-4c01-b146-2920330121d6" placeholder="Tenant UUID">
+    <button id="loadBtn" onclick="loadAll()">Load Data</button>
+    <span id="statusBadge" class="status"></span>
+  </div>
+</div>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-panel="overview">Overview</div>
+  <div class="tab" data-panel="devices">Devices <span class="count" id="count-devices">0</span></div>
+  <div class="tab" data-panel="batteries">Batteries <span class="count" id="count-batteries">0</span></div>
+  <div class="tab" data-panel="apps">App Analytics <span class="count" id="count-apps">0</span></div>
+  <div class="tab" data-panel="scans">Scan Metrics <span class="count" id="count-scans">0</span></div>
+  <div class="tab" data-panel="contracts">Contracts <span class="count" id="count-contracts">0</span></div>
+  <div class="tab" data-panel="repairs">Repairs <span class="count" id="count-repairs">0</span></div>
+  <div class="tab" data-panel="printers">Printers <span class="count" id="count-printers">0</span></div>
+  <div class="tab" data-panel="wlan">WLAN <span class="count" id="count-wlan">0</span></div>
+</div>
+
+<!-- Overview -->
+<div class="panel active" id="panel-overview">
+  <div class="summary-cards" id="summaryCards"></div>
+</div>
+
+<!-- Devices -->
+<div class="panel" id="panel-devices">
+  <div class="toolbar">
+    <input type="text" id="searchDevices" placeholder="Search devices..." oninput="filterTable('devices')">
+    <select id="filterDeviceStatus" onchange="filterTable('devices')"><option value="">All Statuses</option></select>
+    <select id="filterDeviceType" onchange="filterTable('devices')"><option value="">All Types</option></select>
+    <div class="stats" id="stats-devices"></div>
+  </div>
+  <div class="content"><table id="table-devices"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- Batteries -->
+<div class="panel" id="panel-batteries">
+  <div class="toolbar">
+    <input type="text" id="searchBatteries" placeholder="Search batteries..." oninput="filterTable('batteries')">
+    <div class="stats" id="stats-batteries"></div>
+  </div>
+  <div class="content"><table id="table-batteries"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- App Analytics -->
+<div class="panel" id="panel-apps">
+  <div class="toolbar">
+    <input type="text" id="searchApps" placeholder="Search apps..." oninput="filterTable('apps')">
+    <div class="stats" id="stats-apps"></div>
+  </div>
+  <div class="content"><table id="table-apps"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- Scan Metrics -->
+<div class="panel" id="panel-scans">
+  <div class="toolbar">
+    <input type="text" id="searchScans" placeholder="Search scans..." oninput="filterTable('scans')">
+    <div class="stats" id="stats-scans"></div>
+  </div>
+  <div class="content"><table id="table-scans"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- Contracts -->
+<div class="panel" id="panel-contracts">
+  <div class="toolbar">
+    <input type="text" id="searchContracts" placeholder="Search contracts..." oninput="filterTable('contracts')">
+    <div class="stats" id="stats-contracts"></div>
+  </div>
+  <div class="content"><table id="table-contracts"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- Repairs -->
+<div class="panel" id="panel-repairs">
+  <div class="toolbar">
+    <input type="text" id="searchRepairs" placeholder="Search repairs..." oninput="filterTable('repairs')">
+    <div class="stats" id="stats-repairs"></div>
+  </div>
+  <div class="content"><table id="table-repairs"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- Printers -->
+<div class="panel" id="panel-printers">
+  <div class="toolbar">
+    <input type="text" id="searchPrinters" placeholder="Search printers..." oninput="filterTable('printers')">
+    <div class="stats" id="stats-printers"></div>
+  </div>
+  <div class="content"><table id="table-printers"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- WLAN -->
+<div class="panel" id="panel-wlan">
+  <div class="toolbar">
+    <input type="text" id="searchWlan" placeholder="Search WLAN..." oninput="filterTable('wlan')">
+    <div class="stats" id="stats-wlan"></div>
+  </div>
+  <div class="content"><table id="table-wlan"><thead><tr></tr></thead><tbody></tbody></table></div>
+</div>
+
+<script>
+var state = { devices: [], batteries: [], apps: [], scans: [], contracts: [], repairs: [], printers: [], wlan: [], disruptions: [], utilization: [] };
+
+function el(tag, attrs, children) {
+  var e = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(function(k) {
+    var v = attrs[k];
+    if (k === 'cls') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.indexOf('data_') === 0) e.dataset[k.slice(5)] = v;
+    else if (k === 'style') e.setAttribute('style', v);
+    else e.setAttribute(k, v);
+  });
+  if (children) children.forEach(function(c) { if (c) e.appendChild(c); });
+  return e;
+}
+
+function clearChildren(parent) { while (parent.firstChild) parent.removeChild(parent.firstChild); }
+
+function setStatus(text, type) {
+  var badge = document.getElementById('statusBadge');
+  badge.textContent = text;
+  badge.className = 'status ' + type;
+}
+
+function getBasePath() {
+  var base = document.getElementById('apiUrl').value.replace(/\/$/, '');
+  var tenant = document.getElementById('tenantId').value;
+  return base + '/zebra/' + tenant + '/v2/data/devices/operation/analytics/visibility/';
+}
+
+function apiFetch(endpoint) {
+  var url = getBasePath() + endpoint;
+  var key = document.getElementById('apiKey').value;
+  return fetch(url, { headers: { 'apikey': key } })
+    .then(function(res) {
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText + ' for ' + endpoint);
+      return res.json();
+    });
+}
+
+function makeHeaderRow(cols) {
+  var tr = el('tr');
+  cols.forEach(function(c) { tr.appendChild(el('th', { text: c })); });
+  return tr;
+}
+
+function deviceTypeTag(model) {
+  var m = String(model || '').toLowerCase();
+  if (m.indexOf('zd') === 0 || m.indexOf('zt') === 0 || m.indexOf('zq') === 0 || m.indexOf('zc') === 0) return { cls: 'tag tag-printer', text: 'Printer' };
+  if (m.indexOf('ds') === 0 || m.indexOf('li') === 0 || m.indexOf('ls') === 0) return { cls: 'tag tag-scanner', text: 'Scanner' };
+  return { cls: 'tag tag-mc', text: 'Mobile Computer' };
+}
+
+function statusTag(status) {
+  var s = String(status || '');
+  if (s === 'In-Use') return { cls: 'tag tag-ok', text: s };
+  if (s === 'Available') return { cls: 'tag tag-info', text: s };
+  if (s === 'Maintenance') return { cls: 'tag tag-warn', text: s };
+  if (s === 'Decommissioned') return { cls: 'tag tag-err', text: s };
+  return { cls: 'tag', text: s };
+}
+
+function healthTag(health) {
+  var h = String(health || '');
+  if (h === 'Good' || h === 'Healthy') return { cls: 'tag tag-ok', text: h };
+  if (h === 'Fair' || h === 'Warning') return { cls: 'tag tag-warn', text: h };
+  if (h === 'Poor' || h === 'Critical') return { cls: 'tag tag-err', text: h };
+  return { cls: 'tag', text: h };
+}
+
+async function loadAll() {
+  var btn = document.getElementById('loadBtn');
+  btn.disabled = true;
+  setStatus('Loading...', 'loading');
+  try {
+    var results = await Promise.all([
+      apiFetch('total-devices'),
+      apiFetch('battery-level'),
+      apiFetch('application-analytics'),
+      apiFetch('scan-metrics'),
+      apiFetch('entitlement'),
+      apiFetch('repair-lifecycle'),
+      apiFetch('printer-utilization'),
+      apiFetch('wlan-signal-strength'),
+      apiFetch('device-disruptions'),
+      apiFetch('utilization-rightsizing'),
+      apiFetch('printer-alerts'),
+    ]);
+
+    state.devices = (results[0] && results[0].data) || [];
+    state.batteries = (results[1] && results[1].data) || [];
+    state.apps = (results[2] && results[2].data) || [];
+    state.scans = (results[3] && results[3].data) || [];
+    state.contracts = (results[4] && results[4].data) || [];
+    state.repairs = (results[5] && results[5].data) || [];
+    state.printers = (results[6] && results[6].data) || [];
+    state.wlan = (results[7] && results[7].data) || [];
+    state.disruptions = (results[8] && results[8].data) || [];
+    state.utilization = (results[9] && results[9].data) || [];
+    state.printerAlerts = (results[10] && results[10].data) || [];
+
+    document.getElementById('count-devices').textContent = state.devices.length;
+    document.getElementById('count-batteries').textContent = state.batteries.length;
+    document.getElementById('count-apps').textContent = state.apps.length;
+    document.getElementById('count-scans').textContent = state.scans.length;
+    document.getElementById('count-contracts').textContent = state.contracts.length;
+    document.getElementById('count-repairs').textContent = state.repairs.length;
+    document.getElementById('count-printers').textContent = state.printers.length;
+    document.getElementById('count-wlan').textContent = state.wlan.length;
+
+    populateFilters();
+    renderOverview();
+    renderDevices();
+    renderBatteries();
+    renderApps();
+    renderScans();
+    renderContracts();
+    renderRepairs();
+    renderPrinters();
+    renderWlan();
+
+    setStatus('Loaded \u2014 ' + state.devices.length + ' devices, ' + state.batteries.length + ' batteries', 'ok');
+  } catch(e) {
+    setStatus(e.message, 'err');
+  }
+  btn.disabled = false;
+}
+
+function populateFilters() {
+  var statusSel = document.getElementById('filterDeviceStatus');
+  clearChildren(statusSel);
+  statusSel.appendChild(el('option', { value: '', text: 'All Statuses' }));
+  var statuses = [];
+  state.devices.forEach(function(d) { if (statuses.indexOf(d.status) === -1) statuses.push(d.status); });
+  statuses.sort();
+  statuses.forEach(function(s) { statusSel.appendChild(el('option', { value: s, text: s })); });
+
+  var typeSel = document.getElementById('filterDeviceType');
+  clearChildren(typeSel);
+  typeSel.appendChild(el('option', { value: '', text: 'All Types' }));
+  ['Mobile Computer', 'Printer', 'Scanner'].forEach(function(t) {
+    typeSel.appendChild(el('option', { value: t, text: t }));
+  });
+}
+
+function addCard(container, label, value, sub, color) {
+  var card = el('div', { cls: 'card' }, [
+    el('div', { cls: 'label', text: label }),
+    el('div', { cls: 'value', style: color ? 'color:' + color : '', text: String(value) }),
+  ]);
+  if (sub) card.appendChild(el('div', { cls: 'sub', text: sub }));
+  container.appendChild(card);
+}
+
+function renderOverview() {
+  var cards = document.getElementById('summaryCards');
+  clearChildren(cards);
+
+  var inUse = state.devices.filter(function(d) { return d.status === 'In-Use'; }).length;
+  var maint = state.devices.filter(function(d) { return d.status === 'Maintenance'; }).length;
+  var decomm = state.devices.filter(function(d) { return d.status === 'Decommissioned'; }).length;
+  var available = state.devices.filter(function(d) { return d.status === 'Available'; }).length;
+
+  var lowBatt = state.batteries.filter(function(b) { return b.batteryLevel <= 30; }).length;
+  var critBatt = state.batteries.filter(function(b) { return b.batteryLevel <= 15; }).length;
+
+  var sites = [];
+  state.devices.forEach(function(d) { if (d.siteName && sites.indexOf(d.siteName) === -1) sites.push(d.siteName); });
+
+  var models = [];
+  state.devices.forEach(function(d) { if (d.model && models.indexOf(d.model) === -1) models.push(d.model); });
+
+  addCard(cards, 'Total Devices', state.devices.length, inUse + ' in-use, ' + available + ' available');
+  addCard(cards, 'Sites', sites.length, 'Across all locations');
+  addCard(cards, 'Models', models.length, 'Unique device models');
+  addCard(cards, 'In Use', inUse, ((inUse / (state.devices.length || 1)) * 100).toFixed(0) + '% utilization', 'var(--green)');
+  addCard(cards, 'Maintenance', maint, 'Devices in maintenance', maint > 0 ? 'var(--orange)' : 'var(--green)');
+  addCard(cards, 'Decommissioned', decomm, 'Retired devices', decomm > 0 ? 'var(--red)' : 'var(--text-dim)');
+  addCard(cards, 'Low Battery', lowBatt, critBatt + ' critical (<15%)', lowBatt > 0 ? 'var(--orange)' : 'var(--green)');
+  addCard(cards, 'Batteries Tracked', state.batteries.length);
+  addCard(cards, 'App Analytics', state.apps.length, 'Application records');
+  addCard(cards, 'Scan Metrics', state.scans.length, 'Scan data points');
+  addCard(cards, 'Contracts', state.contracts.length, 'Active entitlements');
+  addCard(cards, 'Repairs', state.repairs.length, 'Repair records');
+  addCard(cards, 'Printers', state.printers.length, 'Printer utilization records');
+  addCard(cards, 'Printer Alerts', (state.printerAlerts || []).length, 'Active alerts');
+  addCard(cards, 'WLAN Records', state.wlan.length, 'Signal strength data');
+  addCard(cards, 'Disruptions', state.disruptions.length, 'Device disruption events');
+}
+
+function renderDevices() {
+  var thead = document.querySelector('#table-devices thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Serial', 'Model', 'Full Model', 'Type', 'Status', 'Site', 'OS', 'MAC', 'IP', 'IMEI', 'Asset Name']));
+  var tbody = document.querySelector('#table-devices tbody');
+  clearChildren(tbody);
+  state.devices.forEach(function(d) {
+    var dt = deviceTypeTag(d.model);
+    var st = statusTag(d.status);
+    var dtVal = dt.text;
+    var tr = el('tr', {
+      data_search: [d.serialNum, d.model, d.siteName, d.macAddress, d.ipAddr, d.assetName, d.imei].join(' ').toLowerCase(),
+      data_status: d.status || '', data_type: dtVal
+    }, [
+      el('td', { cls: 'mono', text: d.serialNum || '' }),
+      el('td', null, [el('strong', { text: d.model || '' })]),
+      el('td', { cls: 'dim', text: d.fullModel || '' }),
+      el('td', null, [el('span', { cls: dt.cls, text: dt.text })]),
+      el('td', null, [el('span', { cls: st.cls, text: st.text })]),
+      el('td', { text: d.siteName || '' }),
+      el('td', { cls: 'dim', text: d.os || '' }),
+      el('td', { cls: 'mono', text: d.macAddress || '' }),
+      el('td', { cls: 'mono', text: d.ipAddr || '' }),
+      el('td', { cls: 'dim', text: d.imei || '' }),
+      el('td', { text: d.assetName || '' }),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderBatteries() {
+  var thead = document.querySelector('#table-batteries thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Device Serial', 'Battery Serial', 'Level', 'Health', 'Voltage', 'Temperature', 'Charge Cycles', 'Capacity', 'Last Reported']));
+  var tbody = document.querySelector('#table-batteries tbody');
+  clearChildren(tbody);
+  state.batteries.forEach(function(b) {
+    var levelColor = b.batteryLevel > 50 ? 'var(--green)' : b.batteryLevel > 20 ? 'var(--orange)' : 'var(--red)';
+    var ht = healthTag(b.healthStatus);
+    var tr = el('tr', {
+      data_search: [b.serialNum || b.deviceSerialNumber, b.batterySerialNum || b.batterySerialNumber, b.healthStatus].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: b.serialNum || b.deviceSerialNumber || '' }),
+      el('td', { cls: 'mono', text: b.batterySerialNum || b.batterySerialNumber || '' }),
+      el('td', { style: 'color:' + levelColor + ';font-weight:600', text: (b.batteryLevel != null ? b.batteryLevel + '%' : '') }),
+      el('td', null, [el('span', { cls: ht.cls, text: ht.text })]),
+      el('td', { cls: 'dim', text: b.voltage ? b.voltage + 'mV' : '' }),
+      el('td', { cls: 'dim', text: b.temperature ? b.temperature + '\u00b0C' : '' }),
+      el('td', { text: String(b.chargeCycles || '') }),
+      el('td', { cls: 'dim', text: b.capacity ? b.capacity + 'mAh' : '' }),
+      el('td', { cls: 'dim', text: b.lastReportedDate || '' }),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderApps() {
+  var thead = document.querySelector('#table-apps thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Serial', 'App Name', 'Package', 'Version', 'Usage (min)', 'Data (MB)', 'Crashes', 'Last Used']));
+  var tbody = document.querySelector('#table-apps tbody');
+  clearChildren(tbody);
+  state.apps.forEach(function(a) {
+    var tr = el('tr', {
+      data_search: [a.serialNum, a.appName, a.packageName].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: a.serialNum || '' }),
+      el('td', null, [el('strong', { text: a.appName || '' })]),
+      el('td', { cls: 'dim', text: a.packageName || '' }),
+      el('td', { text: a.appVersion || '' }),
+      el('td', { text: String(a.usageMinutes || '') }),
+      el('td', { text: a.dataUsageMB ? a.dataUsageMB.toFixed(1) : '' }),
+      el('td', { style: a.crashes > 0 ? 'color:var(--red);font-weight:600' : '', text: String(a.crashes != null ? a.crashes : '') }),
+      el('td', { cls: 'dim', text: a.lastUsedDate || '' }),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderScans() {
+  var thead = document.querySelector('#table-scans thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Serial', 'Total Scans', 'Successful', 'Failed', 'Success Rate', 'Avg/Day', 'Scan Type', 'Date']));
+  var tbody = document.querySelector('#table-scans tbody');
+  clearChildren(tbody);
+  state.scans.forEach(function(s) {
+    var rate = s.totalScans > 0 ? ((s.successfulScans / s.totalScans) * 100).toFixed(1) + '%' : 'N/A';
+    var rateColor = s.totalScans > 0 && (s.successfulScans / s.totalScans) > 0.95 ? 'var(--green)' : 'var(--orange)';
+    var tr = el('tr', {
+      data_search: [s.serialNum, s.scanType].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: s.serialNum || '' }),
+      el('td', { text: String(s.totalScans || '') }),
+      el('td', { style: 'color:var(--green)', text: String(s.successfulScans || '') }),
+      el('td', { style: s.failedScans > 0 ? 'color:var(--red)' : '', text: String(s.failedScans || '0') }),
+      el('td', { style: 'color:' + rateColor, text: rate }),
+      el('td', { text: String(s.avgScansPerDay || '') }),
+      el('td', null, [el('span', { cls: 'tag tag-info', text: s.scanType || '' })]),
+      el('td', { cls: 'dim', text: s.reportDate || '' }),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderContracts() {
+  var thead = document.querySelector('#table-contracts thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Contract ID', 'Type', 'Serial', 'Model', 'Start', 'End', 'Status', 'Coverage']));
+  var tbody = document.querySelector('#table-contracts tbody');
+  clearChildren(tbody);
+  state.contracts.forEach(function(c) {
+    var cst = c.contractStatus === 'Active' ? { cls: 'tag tag-ok', text: 'Active' } :
+              c.contractStatus === 'Expiring' ? { cls: 'tag tag-warn', text: 'Expiring' } :
+              { cls: 'tag tag-err', text: c.contractStatus || '' };
+    var tr = el('tr', {
+      data_search: [c.contractId, c.serialNum, c.model, c.contractType].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: c.contractId || '' }),
+      el('td', null, [el('span', { cls: 'tag tag-info', text: c.contractType || '' })]),
+      el('td', { cls: 'mono', text: c.serialNum || '' }),
+      el('td', { text: c.model || '' }),
+      el('td', { cls: 'dim', text: c.startDate || '' }),
+      el('td', { cls: 'dim', text: c.endDate || '' }),
+      el('td', null, [el('span', { cls: cst.cls, text: cst.text })]),
+      el('td', { text: c.coverageLevel || '' }),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderRepairs() {
+  var thead = document.querySelector('#table-repairs thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['RMA', 'Serial', 'Model', 'Site', 'Fault Code', 'Status', 'On-Time', 'NTF', 'Damage', 'Created', 'Resolved']));
+  var tbody = document.querySelector('#table-repairs tbody');
+  clearChildren(tbody);
+  state.repairs.forEach(function(r) {
+    var rst = r.repairStatus === 'Completed' ? { cls: 'tag tag-ok', text: 'Completed' } :
+              r.repairStatus === 'In Progress' ? { cls: 'tag tag-warn', text: 'In Progress' } :
+              r.repairStatus === 'Shipped' ? { cls: 'tag tag-info', text: 'Shipped' } :
+              { cls: 'tag', text: r.repairStatus || '' };
+    var tr = el('tr', {
+      data_search: [r.rmaNumber, r.serialNum, r.model, r.siteName, r.faultCode].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: r.rmaNumber || '' }),
+      el('td', { cls: 'mono', text: r.serialNum || '' }),
+      el('td', { text: r.model || '' }),
+      el('td', { text: r.siteName || '' }),
+      el('td', null, [el('span', { cls: 'tag tag-warn', text: r.faultCode || '' })]),
+      el('td', null, [el('span', { cls: rst.cls, text: rst.text })]),
+      el('td', null, [el('span', { cls: r.onTimeDelivery ? 'tag tag-ok' : 'tag tag-err', text: r.onTimeDelivery ? 'Yes' : 'No' })]),
+      el('td', { text: r.ntf ? 'Yes' : 'No' }),
+      el('td', { text: r.damageIndicator ? 'Yes' : 'No' }),
+      el('td', { cls: 'dim', text: r.createdDate || '' }),
+      el('td', { cls: 'dim', text: r.resolvedDate || '' }),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderPrinters() {
+  var thead = document.querySelector('#table-printers thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Serial', 'Model', 'Site', 'Labels Printed', 'Print Hours', 'Head Cleans', 'Ribbon Usage', 'Media Usage', 'Status']));
+  var tbody = document.querySelector('#table-printers tbody');
+  clearChildren(tbody);
+  state.printers.forEach(function(p) {
+    var pst = statusTag(p.printerStatus || p.status || '');
+    var tr = el('tr', {
+      data_search: [p.serialNum, p.model, p.siteName].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: p.serialNum || '' }),
+      el('td', null, [el('strong', { text: p.model || '' })]),
+      el('td', { text: p.siteName || '' }),
+      el('td', { text: String(p.labelsPrinted || '') }),
+      el('td', { text: String(p.printHours || '') }),
+      el('td', { text: String(p.headCleans || '') }),
+      el('td', { cls: 'dim', text: p.ribbonUsagePct ? p.ribbonUsagePct + '%' : '' }),
+      el('td', { cls: 'dim', text: p.mediaUsagePct ? p.mediaUsagePct + '%' : '' }),
+      el('td', null, [el('span', { cls: pst.cls, text: pst.text })]),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderWlan() {
+  var thead = document.querySelector('#table-wlan thead');
+  clearChildren(thead);
+  thead.appendChild(makeHeaderRow(['Serial', 'Model', 'Site', 'SSID', 'BSSID', 'Signal (dBm)', 'Signal Quality', 'Channel', 'Frequency', 'Band']));
+  var tbody = document.querySelector('#table-wlan tbody');
+  clearChildren(tbody);
+  state.wlan.forEach(function(w) {
+    var sigColor = w.signalStrength > -50 ? 'var(--green)' : w.signalStrength > -70 ? 'var(--orange)' : 'var(--red)';
+    var qualTag = w.signalQuality === 'Excellent' ? { cls: 'tag tag-ok', text: 'Excellent' } :
+                  w.signalQuality === 'Good' ? { cls: 'tag tag-ok', text: 'Good' } :
+                  w.signalQuality === 'Fair' ? { cls: 'tag tag-warn', text: 'Fair' } :
+                  { cls: 'tag tag-err', text: w.signalQuality || '' };
+    var tr = el('tr', {
+      data_search: [w.serialNum, w.model, w.siteName, w.ssid, w.bssid].join(' ').toLowerCase()
+    }, [
+      el('td', { cls: 'mono', text: w.serialNum || '' }),
+      el('td', { text: w.model || '' }),
+      el('td', { text: w.siteName || '' }),
+      el('td', null, [el('strong', { text: w.ssid || '' })]),
+      el('td', { cls: 'mono', text: w.bssid || '' }),
+      el('td', { style: 'color:' + sigColor + ';font-weight:600', text: w.signalStrength != null ? w.signalStrength + ' dBm' : '' }),
+      el('td', null, [el('span', { cls: qualTag.cls, text: qualTag.text })]),
+      el('td', { text: String(w.channel || '') }),
+      el('td', { cls: 'dim', text: w.frequency ? w.frequency + ' MHz' : '' }),
+      el('td', null, [el('span', { cls: 'tag tag-info', text: w.band || '' })]),
+    ]);
+    tbody.appendChild(tr);
+  });
+}
+
+function filterTable(panel) {
+  var searchId = 'search' + panel.charAt(0).toUpperCase() + panel.slice(1);
+  var search = document.getElementById(searchId).value.toLowerCase();
+  var rows = document.querySelectorAll('#table-' + panel + ' tbody tr');
+  var statusFilter = '';
+  var typeFilter = '';
+  if (panel === 'devices') {
+    statusFilter = document.getElementById('filterDeviceStatus').value;
+    typeFilter = document.getElementById('filterDeviceType').value;
+  }
+  var visible = 0;
+  rows.forEach(function(row) {
+    var show = true;
+    if (search && row.dataset.search.indexOf(search) === -1) show = false;
+    if (statusFilter && row.dataset.status !== statusFilter) show = false;
+    if (typeFilter && row.dataset.type !== typeFilter) show = false;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  var statsEl = document.getElementById('stats-' + panel);
+  if (statsEl) statsEl.textContent = 'Showing ' + visible + ' of ' + rows.length;
+}
+
+// Tab switching
+document.getElementById('tabs').addEventListener('click', function(e) {
+  var tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  tab.classList.add('active');
+  document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+});
+
+window.addEventListener('load', function() { loadAll(); });
+</script>
+</body>
+</html>

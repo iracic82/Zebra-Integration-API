@@ -8,19 +8,24 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "deploy": "npx cdk deploy --profile okta-sso --require-approval never",
+    "destroy": "npx cdk destroy --profile okta-sso",
+    "seed": "npx ts-node lambda/seed-data/seed.ts",
+    "synth": "npx cdk synth --profile okta-sso"
   },
   "devDependencies": {
     "@types/jest": "^30",
     "@types/node": "^24.10.1",
+    "aws-cdk": "2.1110.0",
     "jest": "^30",
     "ts-jest": "^29",
-    "aws-cdk": "2.1110.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.241.0",
-    "constructs": "^10.5.0"
+    "constructs": "^10.5.0",
+    "esbuild": "^0.27.3"
   }
 }

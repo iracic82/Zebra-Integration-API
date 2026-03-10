@@ -1,0 +1,9 @@
+services:
+  data-viewer:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - API_URL=${API_URL:-https://zebra-api.highvelocitynetworking.com}
+      - API_KEY=${API_KEY:-}
+    restart: unless-stopped
